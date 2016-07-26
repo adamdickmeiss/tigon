@@ -6634,8 +6634,8 @@ static const struct ptp_clock_info tg3_ptp_caps = {
 	.pps		= 0,
 	.adjfreq	= tg3_ptp_adjfreq,
 	.adjtime	= tg3_ptp_adjtime,
-	.gettime	= tg3_ptp_gettime,
-	.settime	= tg3_ptp_settime,
+	.gettime64	= tg3_ptp_gettime,
+	.settime64	= tg3_ptp_settime,
 	.enable		= tg3_ptp_enable,
 };
 
@@ -8671,9 +8671,9 @@ abort_lso:
 		base_flags |= TXD_FLAG_JMB_PKT;
 
 #ifdef BCM_KERNEL_SUPPORTS_8021Q
-	if (vlan_tx_tag_present(skb)) {
+	if (skb_vlan_tag_present(skb)) {
 		base_flags |= TXD_FLAG_VLAN;
-		vlan = vlan_tx_tag_get(skb);
+		vlan = skb_vlan_tag_get(skb);
 	}
 #endif
 
@@ -13643,11 +13643,16 @@ static u32 tg3_get_rxfh_indir_size(struct net_device *dev)
 #ifdef BCM_HAS_OLD_RXFH_INDIR
 static int tg3_get_rxfh_indir(struct net_device *dev, u32 *indir)
 #else
-static int tg3_get_rxfh(struct net_device *dev, u32 *indir, u8 *key)
+static int tg3_get_rxfh(struct net_device *dev, u32 *indir, u8 *key, u8 *hfunc)
 #endif
 {
 	struct tg3 *tp = netdev_priv(dev);
 	int i;
+
+	if (hfunc)
+		*hfunc = ETH_RSS_HASH_TOP;
+	if (!indir)
+		return 0;
 
 	for (i = 0; i < TG3_RSS_INDIR_TBL_SIZE; i++)
 		indir[i] = tp->rss_ind_tbl[i];
@@ -13657,11 +13662,22 @@ static int tg3_get_rxfh(struct net_device *dev, u32 *indir, u8 *key)
 #ifdef BCM_HAS_OLD_RXFH_INDIR
 static int tg3_set_rxfh_indir(struct net_device *dev, const u32 *indir)
 #else
-static int tg3_set_rxfh(struct net_device *dev, const u32 *indir, const u8 *key)
+static int tg3_set_rxfh(struct net_device *dev, const u32 *indir, const u8 *key,
+			const u8 hfunc)
 #endif
 {
 	struct tg3 *tp = netdev_priv(dev);
 	size_t i;
+
+	/* We require at least one supported parameter to be changed and no
+	 * change in any of the unsupported parameters
+	 */
+	if (key ||
+	    (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP))
+		return -EOPNOTSUPP;
+
+	if (!indir)
+		return 0;
 
 	for (i = 0; i < TG3_RSS_INDIR_TBL_SIZE; i++)
 		tp->rss_ind_tbl[i] = indir[i];
