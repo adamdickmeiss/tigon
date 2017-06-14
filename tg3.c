@@ -7993,7 +7993,11 @@ static void tg3_napi_fini(struct tg3 *tp)
 
 static inline void tg3_netif_stop(struct tg3 *tp)
 {
+#if (LINUX_VERSION_CODE >= 0x040700)
+	netif_trans_update(tp->dev);
+#else
 	tp->dev->trans_start = jiffies;	/* prevent tx timeout */
+#endif
 	tg3_napi_disable(tp);
 	netif_carrier_off(tp->dev); /* prevent spurious tx timeout */
 	netif_tx_disable(tp->dev);
